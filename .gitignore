@@ -1,2 +1,2 @@
-./duckdb
+duckdb
 libduckdb_static.a
