@@ -5,6 +5,28 @@
 #include "duckdb.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include<iostream>
+#include<vector>
+
+int32_t *pushIntoBuffer(int32_t *buffer, int32_t divisor, int32_t currentSizeEstimate, int32_t elementsSoFar) {
+
+	buffer[elementsSoFar] = divisor;
+
+	if(elementsSoFar == currentSizeEstimate-1) {
+		// we're out of space!
+		// allocate new buffer with twice the size and return it
+		int32_t *newBuffer = (int32_t *)malloc(currentSizeEstimate*2*sizeof(int32_t));
+		
+		for(int32_t i =0; i<=elementsSoFar; i++){
+			newBuffer[i] = buffer[i];	
+		}
+
+		return newBuffer;
+	}
+
+	return buffer;
+
+}
 
 // ------------------------------------------------------
 // The divisorsif UDF logic
@@ -25,56 +47,37 @@ static void divisorsif_function(duckdb_function_info info, duckdb_data_chunk inp
 	// row of this vector is non-null.
 	uint64_t *col_validity = duckdb_vector_get_validity(column);
 
-	// the output should be a vector of lists. The actual data for all lists is 
-	// stored elsewhere in a contiguous space. Each element in a vector of lists merely
-	// tells us the offset and length in that contiguous space that belongs to the
-	// list we want. Goal is to first figure out the number of elements, then 
-	// use duckdb_list_reserve to set the size, and copy all relevant data into the
-	// list.
-	
-	/*int32_t *temp_list = (int32_t *)malloc(sizeEstimate*sizeof(int32_t));*/
-	/*int32_t *arrTempLists[2];*/
-	/*arrTempLists[0] = temp_list;*/
-	/*int switches = 0;*/
-		
-	int elementsSoFar = 0;
-
+	// the output should be a vector, where each element is a list of divisors 	
 	duckdb_list_entry *entries = (duckdb_list_entry *)duckdb_vector_get_data(output);
 	uint64_t *entry_validity = duckdb_vector_get_validity(output);
 
-	int sizeEstimate = 1024;
-	duckdb_list_vector_reserve(output, sizeEstimate);
-
-	duckdb_vector child_vec = duckdb_list_vector_get_child(output);
-	int32_t *child_data = (int32_t *)duckdb_vector_get_data(child_vec);
+	// initialize temporary storage for all divisors
+	//int32_t currentSizeEstimate = 1024;
+	//int32_t elementsSoFar = 0;
+	//int32_t *divisorsBuffer = (int32_t *)malloc(currentSizeEstimate*sizeof(int32_t));
+	std::vector<int32_t> divisorsBuffer = {};
 
 	fprintf(stderr, "About to iterate through rows\n");
 	for (idx_t row = 0; row < rowsPerVector; row++) {
         if (duckdb_validity_row_is_valid(col_validity, row)) {
 
-			fprintf(stderr, "Row is valid, finding divisors\n");
-			// now we come to the actual computation:
-			// creating a list of divisors of column_data[row]
-			// the idea is to find out how many divisors each number has and
-			// create an (offset, length) struct for them
+			fprintf(stderr, "Row is valid, finding divisorsssss\n");
+
+			// creating a list of divisors of column_data[row]. 
+			// Each list of divisors represented by an (offset, length)
 			int32_t n = column_data[row];
-			int32_t offset = elementsSoFar;
+			int32_t offset = divisorsBuffer.size();
 			int32_t sizeOfThisList = 0;
+
 			for(int32_t i = 1; i < n; i++)
 			{
 				if(n % i == 0)
 				{
-					/*temp_list[elementsSoFar] = i; */
-					child_data[elementsSoFar] = i;
-					elementsSoFar++;
+					//divisorsBuffer = pushIntoBuffer(divisorsBuffer, i, currentSizeEstimate, elementsSoFar);
+					divisorsBuffer.push_back(i);
+					//currentSizeEstimate = (elementsSoFar == currentSizeEstimate - 1) ? currentSizeEstimate*2 : currentSizeEstimate; 
+					//elementsSoFar++;
 					sizeOfThisList++;
-
-					if(elementsSoFar == sizeEstimate) {
-						sizeEstimate *= 2;
-						duckdb_list_vector_reserve(output, sizeEstimate); // final capacity
-						child_vec = duckdb_list_vector_get_child(output);
-						child_data = (int32_t *)duckdb_vector_get_data(child_vec);
-					}
 
 				}
 			}
@@ -88,7 +91,16 @@ static void divisorsif_function(duckdb_function_info info, duckdb_data_chunk inp
         
     }
 
-	duckdb_list_vector_set_size(output, elementsSoFar+1);
+	int32_t elementsSoFar = divisorsBuffer.size();
+	duckdb_list_vector_reserve(output, elementsSoFar); // final capacity
+	duckdb_vector child_vec = duckdb_list_vector_get_child(output);
+	int32_t *child_data = (int32_t *)duckdb_vector_get_data(child_vec);
+	duckdb_list_vector_set_size(output, elementsSoFar);
+
+	// transferring from buffer into child_vector
+	for(int64_t i = 0; i<elementsSoFar; i++){
+		child_data[i] = divisorsBuffer[i];	
+	}
 		
 }
 
@@ -148,7 +160,7 @@ int main() {
 
     printf("Executing query...\n");
     duckdb_result result;
-    if (duckdb_query(conn, "SELECT i, divisorsIf(i::INTEGER) AS divs FROM range(1, 10) tbl(i);", &result) != DuckDBSuccess) {
+    if (duckdb_query(conn, "SELECT i, divisorsIf(i::INTEGER) AS divs FROM range(1, 20) tbl(i);", &result) != DuckDBSuccess) {
         fprintf(stderr, "Query failed: %s\n", duckdb_result_error(&result));
         duckdb_disconnect(&conn);
         duckdb_close(&db);
