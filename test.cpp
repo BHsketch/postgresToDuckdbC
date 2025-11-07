@@ -51,10 +51,6 @@ static void divisorsif_function(duckdb_function_info info, duckdb_data_chunk inp
 	duckdb_list_entry *entries = (duckdb_list_entry *)duckdb_vector_get_data(output);
 	uint64_t *entry_validity = duckdb_vector_get_validity(output);
 
-	// initialize temporary storage for all divisors
-	//int32_t currentSizeEstimate = 1024;
-	//int32_t elementsSoFar = 0;
-	//int32_t *divisorsBuffer = (int32_t *)malloc(currentSizeEstimate*sizeof(int32_t));
 	std::vector<int32_t> divisorsBuffer = {};
 
 	fprintf(stderr, "About to iterate through rows\n");
@@ -73,10 +69,7 @@ static void divisorsif_function(duckdb_function_info info, duckdb_data_chunk inp
 			{
 				if(n % i == 0)
 				{
-					//divisorsBuffer = pushIntoBuffer(divisorsBuffer, i, currentSizeEstimate, elementsSoFar);
 					divisorsBuffer.push_back(i);
-					//currentSizeEstimate = (elementsSoFar == currentSizeEstimate - 1) ? currentSizeEstimate*2 : currentSizeEstimate; 
-					//elementsSoFar++;
 					sizeOfThisList++;
 
 				}
